@@ -1,5 +1,7 @@
 import numpy as np
+import mlx.core as mx
 from typing import Literal
+import time
 
 class Network:
     def __init__(self):
@@ -32,34 +34,46 @@ class Network:
         return result
     
     # train network
-    def fit(self, x_train, y_train, epochs, learning_rate):
+    def fit(self, x_train, y_train, epochs, learning_rate, batch_size=64):
         # sample dimension
         samples = len(x_train)
+        steps_per_epoch = samples // batch_size
         
         # training loop
         for i in range(epochs):
             err =  0
-            for j in range(samples):
-                # forward prop
-                output = x_train[j]
+            start_time = time.time()
+
+            for j in range(0, samples, batch_size):
+                batch_end = min(j+batch_size, samples)
+                # Get batch
+                x_batch = x_train[j:batch_end]
+                y_batch = y_train[j:batch_end]
+
+                # Forward pass
+                output = x_batch
                 for layer in self.layers:
                     output = layer.forward_prop(output)
-                
-                # compute loss
-                err += self.loss(y_train[j], output)
 
-                # backward prop
-                error = self.loss_prime(y_train[j], output)
+                # Compute loss and accumulate error
+                err += self.loss(y_batch, output)
+
+                # Backward pass
+                error = self.loss_prime(y_batch, output)
                 for layer in reversed(self.layers):
                     error = layer.backward_prop(error, learning_rate)
 
-            err /= samples
+            err /= steps_per_epoch
+            end_time = time.time()
             print('epoch %d/%d  error=%f' % (i, epochs, err))
 
     def get_loss(self, loss_name):
         if loss_name == 'mse':
             def mse(y, y_hat):
-                return np.mean(np.power(y-y_hat, 2))
+                # print(y-y_hat)
+                # print(mx.power(y-y_hat, 2))
+                # print(mx.mean(mx.power(y-y_hat, 2)))
+                return mx.mean(mx.power(y-y_hat, 2))
 
             def mse_prime(y, y_hat):
                 return 2*(y_hat-y)/y.size

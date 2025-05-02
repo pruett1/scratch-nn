@@ -3,6 +3,9 @@ class Layer:
         self.input = None
         self.output = None
 
+    def print(self):
+        raise NotImplementedError
+
     # compute output Y given input X
     def forward_prop(self, input):
         raise NotImplementedError
