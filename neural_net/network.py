@@ -19,19 +19,22 @@ class Network:
         self.loss = loss
         self.loss_prime = loss_prime
 
-    def predict(self, input):
+    def predict(self, input, batch_size=64):
         # sample dimension
         samples = len(input)
         result = []
 
         # run over samples
-        for i in range(samples):
-            output = input[i]
+        for i in range(0, samples, batch_size):
+            batch_end = min(i+batch_size, samples)
+            input_batch = input[i:batch_end]
+            output = input_batch
             for layer in self.layers:
                 output = layer.forward_prop(output)
             result.append(output)
 
-        return result
+        # Concatenate results using mlx.core
+        return mx.concatenate(result, axis=0)
     
     # train network
     def fit(self, x_train, y_train, epochs, learning_rate, batch_size=64):
