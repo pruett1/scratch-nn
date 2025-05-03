@@ -4,7 +4,8 @@ import mlx.core as mx
 from typing import Literal
 
 class ActivationLayer(Layer):
-    def __init__(self, activation: Literal['tanh', 'sigmoid', 'relu', 'binary_step']):
+    def __init__(self, activation: Literal['tanh', 'sigmoid', 'relu', 'binary_step', 'softmax']):
+        self.activation_name = activation
         act, act_prime = self.get_activations(activation)
         self.activation =  act
         self.activation_prime = act_prime
@@ -45,4 +46,17 @@ class ActivationLayer(Layer):
             def binary_step_prime(x):
                 return 0
             return binary_step, binary_step_prime
+        elif activation == 'softmax':
+            def softmax(x):
+                x_max = mx.max(x, axis=-1, keepdims=True)
+                e_x = mx.exp(x - x_max)
+                return e_x / mx.sum(e_x, axis=-1, keepdims=True)
+            def softmax_prime(x):
+                s = softmax(x)
+                batch_size, num_classes = s.shape
+
+                diag = mx.multiply(s, (1-s))
+                off_diag = mx.multiply(s, -s)
+                return diag+off_diag
+            return softmax, softmax_prime
         
