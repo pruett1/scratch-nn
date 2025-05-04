@@ -81,7 +81,7 @@ class Network:
 
             err /= steps_per_epoch
             learning_rate = learning_rate / (1 + decay_factor * i)
-            print('epoch %d/%d  error=%f' % (i, epochs, err))
+            print('epoch %d/%d  error=%f' % (i+1, epochs, err))
 
             if (plot_loss):
                 loss_list.append(err)
