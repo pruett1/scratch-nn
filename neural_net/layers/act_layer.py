@@ -16,6 +16,10 @@ class ActivationLayer(Layer):
         return self.output
     
     def backward_prop(self, output_error, learning_rate):
+        if self.activation_name == 'softmax':
+            # For softmax, we need to use the derivative of the loss function
+            # which is already calculated in the network class
+            return output_error
         return self.activation_prime(self.input) * output_error # dE/dX_i=dE/dY_i*dY_i/dX_i=dE/dY_i*f'(X_i) -> dE/dX=dE/dY elem* f'(X)
     
     def print(self):
@@ -52,11 +56,8 @@ class ActivationLayer(Layer):
                 e_x = mx.exp(x - x_max)
                 return e_x / mx.sum(e_x, axis=-1, keepdims=True)
             def softmax_prime(x):
-                s = softmax(x)
-                batch_size, num_classes = s.shape
-
-                diag = mx.multiply(s, (1-s))
-                off_diag = mx.multiply(s, -s)
-                return diag+off_diag
+                # With cross-entropy loss, the derivative is simply the softmax output minus the one-hot encoded target
+                # Which is the return value of loss_prime in the network class
+                return x
             return softmax, softmax_prime
         
