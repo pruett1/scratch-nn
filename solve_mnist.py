@@ -1,5 +1,6 @@
 import numpy as np
 import mlx.core as mx
+import time
 from sklearn.metrics import classification_report, accuracy_score
 
 from neural_net.network import Network
@@ -22,12 +23,6 @@ x_train = mx.array(x_train) / 255 #normalize
 x_test = mx.array(x_test) / 255 #normalize
 y_train = mx.array(y_train)
 y_test = mx.array(y_test)
-
-# # Reshape y_train one-hot encoding
-# num_classes = 10
-# one_hot = mx.zeros((y_train.shape[0], num_classes))
-# one_hot[mx.arange(y_train.shape[0]), y_train] = 1
-# y_train = one_hot
 
 #Reshape x_train and x_test to be shape (batch_size, channels, height, width)
 if x_train.ndim == 2:
@@ -53,16 +48,77 @@ net.add(FCLayer(128, 10))
 net.add(ActivationLayer('softmax'))
 
 net.loss_type('cross_entropy')
-net.fit(x_train, y_train, epochs=450, learning_rate=0.001, decay_factor=0.001, batch_size=128, plot_loss=True)
+start_time = time.time()
+net.fit(x_train, y_train, epochs=60, learning_rate=0.01, decay_factor=0.001, batch_size=128, plot_loss=False)
+end_time = time.time()
+scratch_training_time = end_time - start_time
+print(f'Training time: {scratch_training_time:.2f} seconds')
 
 out = net.predict(x_test)
 y_pred = mx.argmax(out, axis=1).tolist()
 y_true = y_test.tolist()
 
+class_report = classification_report(y_pred, y_true)
+print(class_report)
+accuracy_scratchnn = accuracy_score(y_pred, y_true)
+print(f'Accuracy: {accuracy_scratchnn * 100:.2f}%')
 
-classification_report = classification_report(y_pred, y_true)
-print(classification_report)
-accuracy = accuracy_score(y_pred, y_true)
-print(f'Accuracy: {accuracy * 100:.2f}%')
+torch_model = nn.Sequential(
+    nn.Conv2d(1, 32, kernel_size=3, padding=1),
+    nn.ReLU(),
+    nn.Conv2d(32, 64, kernel_size=3, padding=1),
+    nn.ReLU(),
+    nn.MaxPool2d(kernel_size=2, stride=2),
+    nn.Flatten(),
+    nn.Linear(64*14*14, 128),
+    nn.ReLU(),
+    nn.Linear(128, 10)
+    # no activation layer here, as we will use CrossEntropyLoss which applies softmax internally
+)
 
-print(out)
+torch_model = torch_model.to('mps')
+
+torch_model.train()
+optimizer = optim.SGD(torch_model.parameters(), lr=0.01, weight_decay=0.001)
+loss_fn = nn.CrossEntropyLoss()
+batch_size = 128
+num_epochs = 60
+
+start_time = time.time()
+for epoch in range(num_epochs):
+    for i in range(0, len(x_train), batch_size):
+        batch_end = min(i+batch_size, len(x_train))
+        x_batch = torch.tensor(x_train[i:batch_end], dtype=torch.float32).to('mps')
+        y_batch = torch.tensor(y_train[i:batch_end], dtype=torch.long).to('mps')
+
+        optimizer.zero_grad()
+        output = torch_model(x_batch)
+        loss = loss_fn(output, y_batch)
+        loss.backward()
+        optimizer.step()
+
+    print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}')
+end_time = time.time()
+torch_training_time = end_time - start_time
+print(f'Training time: {torch_training_time:.2f} seconds')
+torch_model.eval()
+
+
+x_test_tensor = torch.tensor(x_test, dtype=torch.float32).to('mps')
+y_test_tensor = torch.tensor(y_test, dtype=torch.long).to('mps')
+with torch.no_grad():
+    output = torch_model(x_test_tensor)
+    _, predicted = torch.max(output, 1)
+    y_pred_torch = predicted.cpu().numpy()
+    y_true_torch = y_test_tensor.cpu().numpy()
+    class_report = classification_report(y_true_torch, y_pred_torch)
+    print(class_report)
+    accuracy_torch = accuracy_score(y_true_torch, y_pred_torch)
+    print(f'Accuracy: {accuracy_torch * 100:.2f}%')
+
+# Compare the accuracy of the two models
+print(f'Accuracy of ScratchNN: {accuracy_scratchnn * 100:.2f}%')
+print(f'Accuracy of PyTorch: {accuracy_torch * 100:.2f}%')
+print(f'Accuracy difference: {abs(accuracy_scratchnn - accuracy_torch) * 100:.2f}%')
+
+print(f'Training time difference: {abs(scratch_training_time - torch_training_time):.2f} seconds')
