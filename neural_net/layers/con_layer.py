@@ -4,7 +4,7 @@ import mlx.core as mx
 
 #simple convolutional layer with a stride of 1
 class Conv2dLayer(Layer):
-    def __init__(self, in_channels, out_channels, kernel_size, padding=0, bias=True):
+    def __init__(self, in_channels, out_channels, kernel_size, padding=0, bias=True, optimizer='adam', beta1=0.9, beta2=0.999, epsilon=1e-8):
         self.padding = padding
         self.out_channels = out_channels
         if (bias):
@@ -15,6 +15,18 @@ class Conv2dLayer(Layer):
         #use Kaiming initialization
         limit = 2 / (in_channels * kernel_size * kernel_size)
         self.kernel = mx.random.normal(scale=limit, shape=[out_channels, in_channels, kernel_size, kernel_size])
+
+        self.optimizer = optimizer
+
+        if optimizer == 'adam':
+            self.m_k = mx.zeros_like(self.kernel)
+            self.m_b = mx.zeros_like(self.bias)
+            self.v_k = mx.zeros_like(self.kernel)
+            self.v_b = mx.zeros_like(self.bias)
+            self.beta1 = beta1
+            self.beta2 = beta2
+            self.epsilon = epsilon
+            self.t = 0
 
     def print(self):
         print("conv layer")
@@ -57,11 +69,26 @@ class Conv2dLayer(Layer):
 
         dcol = mx.matmul(dout, self.kernel_vec.T) #gradient wrt col
 
-        #gradient descents
-        if (self.bias is not None):
-            self.bias -= learning_rate * self.db
+        if self.optimizer == 'sgd':
+            #gradient descents
+            if (self.bias is not None):
+                self.bias -= learning_rate * self.db
 
-        self.kernel -= learning_rate * self.dkernel
+            self.kernel -= learning_rate * self.dkernel
+        elif self.optimizer == 'adam':
+            self.t += 1
+            self.m_k = self.beta1 * self.m_k + (1 - self.beta1) * self.dkernel
+            self.v_k = self.beta2 * self.v_k + (1 - self.beta2) * mx.square(self.dkernel)
+            m_hat_k = self.m_k / (1 - self.beta1 ** self.t)
+            v_hat_k = self.v_k / (1 - self.beta2 ** self.t)
+            self.kernel -= learning_rate * m_hat_k / (mx.sqrt(v_hat_k) + self.epsilon)
+            
+            if self.bias is not None:
+                self.m_b = self.beta1 * self.m_b + (1 - self.beta1) * self.db
+                self.v_b = self.beta2 * self.v_b + (1 - self.beta2) * mx.square(self.db)
+                m_hat_b = self.m_b / (1 - self.beta1 ** self.t)
+                v_hat_b = self.v_b / (1 - self.beta2 ** self.t)
+                self.bias -= learning_rate * m_hat_b / (mx.sqrt(v_hat_b) + self.epsilon)
 
         dx = self.col2image(dcol, self.padding) #gradient wrt input
 
