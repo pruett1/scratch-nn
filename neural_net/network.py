@@ -38,7 +38,7 @@ class Network:
         return mx.concatenate(result, axis=0)
     
     # train network
-    def fit(self, x_train, y_train, epochs, learning_rate, decay_factor, batch_size=64, plot_loss=False):
+    def fit(self, x_train, y_train, epochs, learning_rate, decay_factor, batch_size=64, plot_loss=False, early_stopping=False, early_stopping_threshold=0.01, patience=5):
         if (plot_loss):
             plt.ion()
             fig, ax = plt.subplots()
@@ -55,6 +55,8 @@ class Network:
         # sample dimension
         samples = len(x_train)
         steps_per_epoch = samples // batch_size
+
+        rolling_error = []
         
         # training loop
         for i in range(epochs):
@@ -83,6 +85,21 @@ class Network:
             learning_rate = learning_rate / (1 + decay_factor * i)
             print('epoch %d/%d  error=%f' % (i+1, epochs, err))
 
+            #early stopping
+            if early_stopping:
+                if len(rolling_error) == patience:
+                    best_loss = min(rolling_error)
+                    improvement = (err - best_loss) / best_loss
+
+                    if improvement >= -early_stopping_threshold:
+                        print(f"Early stopping at epoch {i+1}")
+                        epochs = i
+                        break
+
+                rolling_error.append(err)
+                if len(rolling_error) > patience:
+                    rolling_error = rolling_error[1:]
+
             if (plot_loss):
                 loss_list.append(err)
                 epoch_list.append(i)
@@ -96,6 +113,8 @@ class Network:
         if (plot_loss):
             plt.ioff()
             plt.show()
+        
+        return epochs+1
 
     def get_loss(self, loss_name):
         if loss_name == 'mse':

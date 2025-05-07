@@ -49,7 +49,10 @@ net.add(ActivationLayer('softmax'))
 
 net.loss_type('cross_entropy')
 start_time = time.time()
-net.fit(x_train, y_train, epochs=60, learning_rate=0.01, decay_factor=0.001, batch_size=128, plot_loss=False)
+
+num_epochs = net.fit(x_train, y_train, epochs=60, learning_rate=0.001, decay_factor=0.01, batch_size=128, plot_loss=False, 
+        early_stopping=True, early_stopping_threshold=0.01, patience=5)
+
 end_time = time.time()
 scratch_training_time = end_time - start_time
 print(f'Training time: {scratch_training_time:.2f} seconds')
@@ -79,10 +82,14 @@ torch_model = nn.Sequential(
 torch_model = torch_model.to('mps')
 
 torch_model.train()
-optimizer = optim.SGD(torch_model.parameters(), lr=0.01, weight_decay=0.001)
+optimizer = optim.Adam(torch_model.parameters(), lr=0.001, weight_decay=0.01)
 loss_fn = nn.CrossEntropyLoss()
 batch_size = 128
-num_epochs = 60
+
+rolling_error = []
+patience = 10
+early_stopping_threshold = 0.01
+early_stopping = False
 
 start_time = time.time()
 for epoch in range(num_epochs):
@@ -97,7 +104,21 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
 
+    if early_stopping:
+        if len(rolling_error) == patience:
+            best_loss = min(rolling_error)
+            improvement = (loss.item() - best_loss) / best_loss
+
+            if improvement >= -early_stopping_threshold:
+                print(f"Early stopping at epoch {epoch+1}")
+                break
+
+        rolling_error.append(loss.item())
+        if len(rolling_error) > patience:
+            rolling_error = rolling_error[1:]
+
     print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f}')
+
 end_time = time.time()
 torch_training_time = end_time - start_time
 print(f'Training time: {torch_training_time:.2f} seconds')
@@ -119,6 +140,8 @@ with torch.no_grad():
 # Compare the accuracy of the two models
 print(f'Accuracy of ScratchNN: {accuracy_scratchnn * 100:.2f}%')
 print(f'Accuracy of PyTorch: {accuracy_torch * 100:.2f}%')
-print(f'Accuracy difference: {abs(accuracy_scratchnn - accuracy_torch) * 100:.2f}%')
+print(f'Accuracy difference: {accuracy_scratchnn - accuracy_torch * 100:.2f}%')
+print(f'Accuracy % change: {(accuracy_torch - accuracy_scratchnn) / accuracy_torch:.2f}%')
 
-print(f'Training time difference: {abs(scratch_training_time - torch_training_time):.2f} seconds')
+print(f'Training time difference: {torch_training_time - scratch_training_time:.2f} seconds')
+print(f'Training time % change: {(torch_training_time - scratch_training_time) / torch_training_time * 100:.2f}%')
